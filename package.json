@@ -1,0 +1,37 @@
+{
+  "name": "email-ai-assistant",
+  "version": "1.0.0",
+  "description": "AI-powered email assistant: write, preview, and send professional emails with Groq AI (Llama 3.3) and Gmail SMTP from a modern web UI.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test-send": "node test-send.js",
+    "test-e2e": "node test-e2e.js"
+  },
+  "keywords": [
+    "email",
+    "ai",
+    "groq",
+    "llama",
+    "nodemailer",
+    "gmail",
+    "smtp",
+    "express",
+    "whatsapp",
+    "automation"
+  ],
+  "author": "ashrafumair111-lab",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ashrafumair111-lab/Email-AI-Assistant.git"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "nodemailer": "^6.9.14"
+  }
+}

@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Email Assistant</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #4f8cff;
+      --accent2: #7c5cff;
+      --ok: #22c55e;
+      --err: #ef4444;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; background: linear-gradient(135deg, #0f172a, #1e1b3a 55%, #0f172a);
+      color: var(--text); font-family: "Segoe UI", system-ui, sans-serif;
+    }
+    .wrap { max-width: 860px; margin: 0 auto; padding: 24px 16px; }
+    header { display: flex; align-items: center; gap: 12px; }
+    .logo {
+      width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center;
+      background: linear-gradient(135deg, var(--accent), var(--accent2)); font-size: 20px; color: #fff;
+    }
+    h1 { font-size: 22px; margin: 0; }
+    .sub { color: var(--muted); margin: 0; font-size: 13px; }
+
+    .tabs { display: flex; gap: 8px; margin: 20px 0 0; flex-wrap: wrap; }
+    .tab {
+      padding: 9px 18px; border-radius: 22px; border: 1px solid var(--border); cursor: pointer;
+      background: transparent; color: var(--muted); font-size: 13.5px; font-weight: 600;
+      transition: all .15s;
+    }
+    .tab.active { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; border-color: transparent; }
+
+    .card {
+      background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+      padding: 22px; box-shadow: 0 10px 30px rgba(0,0,0,.35);
+    }
+    .hidden { display: none; }
+
+    label { display: block; font-size: 12.5px; color: var(--muted); margin: 0 0 6px; font-weight: 600; }
+    input, textarea, select {
+      width: 100%; background: #0b1120; color: var(--text); border: 1px solid #334155;
+      border-radius: 10px; padding: 11px 13px; font-size: 14px; font-family: inherit;
+    }
+    input:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent); }
+    textarea { resize: vertical; min-height: 90px; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .field { margin-bottom: 14px; }
+
+    .btn {
+      border: none; border-radius: 11px; padding: 12px 22px; font-size: 14.5px; font-weight: 700;
+      cursor: pointer; color: #fff; transition: transform .1s, opacity .2s;
+    }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-primary { background: linear-gradient(135deg, var(--accent), var(--accent2)); }
+    .btn-send { background: var(--ok); margin-left: 10px; }
+    .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid #fff3; border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; margin-right: 8px; vertical-align: -2px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .msg { display: none; border-radius: 10px; padding: 11px 14px; font-size: 13.5px; margin-top: 12px; }
+    .msg.ok { display: block; background: rgba(34,197,94,.12); color: var(--ok); border: 1px solid rgba(34,197,94,.35); }
+    .msg.err { display: block; background: rgba(239,68,68,.12); color: var(--err); border: 1px solid rgba(239,68,68,.35); }
+
+    .draft { white-space: pre-wrap; line-height: 1.55; font-size: 14px; }
+    .draft-title { font-weight: 700; font-size: 15px; color: var(--accent); margin-bottom: 10px; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #334155; }
+    th { color: var(--muted); font-weight: 700; font-size: 12px; }
+    .badge { background: rgba(34,197,94,.15); color: var(--ok); border-radius: 20px; padding: 2px 10px; font-size: 11.5px; }
+    .empty { text-align: center; color: var(--muted); padding: 26px 0; }
+    footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 22px; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">✉️</div>
+    <div>
+      <h1>AI Email Assistant</h1>
+      <p class="sub">Groq AI + Gmail SMTP · Node.js · Express</p>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="compose">✍️ Compose with AI</button>
+    <button class="tab" data-tab="manual">✉️ Manual Send</button>
+    <button class="tab" data-tab="history">📜 History</button>
+  </div>
+
+  <!-- ═══ Compose with AI ═══ -->
+  <div id="tab-compose" class="card">
+    <div class="field">
+      <label>What should the email be about? (1–2 sentences)</label>
+      <textarea id="topic" placeholder="e.g. Remind client about pending payment of invoice #102, 2 weeks overdue, polite but firm..."></textarea>
+    </div>
+    <div class="grid2">
+      <div class="field">
+        <label>Tone</label>
+        <select id="tone">
+          <option value="professional">Professional</option>
+          <option value="friendly">Friendly</option>
+          <option value="persuasive">Persuasive</option>
+          <option value="concise">Short &amp; Concise</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Recipient name (optional)</label>
+        <input id="toName" placeholder="e.g. Mr. Ahmed" />
+      </div>
+    </div>
+    <div class="field">
+      <label>Recipient email</label>
+      <input id="to" type="email" placeholder="client@example.com (leave empty to use default)" />
+    </div>
+    <div>
+      <button class="btn btn-primary" id="genBtn">✨ Generate Preview</button>
+      <button class="btn btn-send hidden" id="sendBtn">🚀 Send Email</button>
+    </div>
+    <div class="msg" id="aiMsg"></div>
+    <div id="draftBox" class="hidden">
+      <div class="draft-title" id="draftSubject"></div>
+      <div class="draft" id="draftBody"></div>
+    </div>
+  </div>
+
+  <!-- ═══ Manual Send ═══ -->
+  <div id="tab-manual" class="card hidden">
+    <div class="field"><label>Subject</label><input id="mSubject" /></div>
+    <div class="field"><label>Body</label><textarea id="mBody" rows="5"></textarea></div>
+    <div class="field"><label>To (optional)</label><input id="mTo" type="email" placeholder="recipient@example.com" /></div>
+    <button class="btn btn-send" id="mSendBtn">🚀 Send Email</button>
+    <div class="msg" id="mMsg"></div>
+  </div>
+
+  <!-- ═══ History ═══ -->
+  <div id="tab-history" class="card hidden">
+    <table>
+      <thead><tr><th>Time</th><th>To</th><th>Subject</th><th>Status</th></tr></thead>
+      <tbody id="logBody"></tbody>
+    </table>
+    <div class="empty hidden" id="logEmpty">No emails sent yet. Send your first one! 🎉</div>
+  </div>
+
+  <footer>Gmail SMTP · Groq (llama-3.3-70b-versatile) · Runs on http://localhost:3000</footer>
+</div>
+<script>
+  let currentDraft = null;
+
+  // ---------- tabs ----------
+  document.querySelectorAll(".tab").forEach(t => {
+    t.onclick = function () {
+      document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"));
+      t.classList.add("active");
+      document.querySelectorAll(".card").forEach(c => c.classList.add("hidden"));
+      document.getElementById("tab-" + t.dataset.tab).classList.remove("hidden");
+    };
+  });
+
+  // ---------- helpers ----------
+  function showMsg(el, text, ok) {
+    el.className = "msg " + (ok ? "ok" : "err");
+    el.textContent = text;
+  }
+
+  async function postJson(url, data) {
+    const r = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    return { status: r.status, body: await r.json() };
+  }
+
+  // ---------- AI generate ----------
+  document.getElementById("genBtn").onclick = async function () {
+    const btn = this;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>Thinking…';
+    const msg = document.getElementById("aiMsg");
+    const draftBox = document.getElementById("draftBox");
+    draftBox.className = "hidden";
+    document.getElementById("sendBtn").classList.add("hidden");
+    try {
+      const { status, body } = await postJson("/api/ai-email", {
+        topic: document.getElementById("topic").value,
+        tone: document.getElementById("tone").value,
+        toName: document.getElementById("toName").value,
+      });
+      if (!body.success) throw new Error(body.error || "Generation failed");
+      currentDraft = body.draft;
+      document.getElementById("draftSubject").textContent = "📧 " + body.draft.subject;
+      document.getElementById("draftBody").textContent = body.draft.body;
+      draftBox.className = "draft";
+      document.getElementById("sendBtn").classList.remove("hidden");
+      showMsg(msg, "✅ Draft ready! Review below, then hit Send.", true);
+    } catch (e) {
+      showMsg(msg, "❌ " + e.message, false);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = "✨ Generate Preview";
+    }
+  };
+
+  // ---------- AI send ----------
+  document.getElementById("sendBtn").onclick = async function () {
+    const btn = this;
+    btn.disabled = true;
+    const msg = document.getElementById("aiMsg");
+    try {
+      const { status, body } = await postJson("/api/ai-email", {
+        topic: document.getElementById("topic").value,
+        tone: document.getElementById("tone").value,
+        toName: document.getElementById("toName").value,
+        to: document.getElementById("to").value,
+        send: true,
+      });
+      if (!body.success) throw new Error(body.error || "Send failed");
+      showMsg(msg, "✅ Email sent to " + body.to + " (ID: " + body.messageId + ")", true);
+      loadLogs();
+      document.getElementById("sendBtn").classList.add("hidden");
+    } catch (e) {
+      showMsg(msg, "❌ " + e.message, false);
+    } finally {
+      btn.disabled = false;
+    }
+  };
+// ---------- manual send ----------
+  document.getElementById("mSendBtn").onclick = async function () {
+    const btn = this;
+    btn.disabled = true;
+    const msg = document.getElementById("mMsg");
+    try {
+      const { status, body } = await postJson("/send-email", {
+        subject: document.getElementById("mSubject").value,
+        body: document.getElementById("mBody").value,
+        to: document.getElementById("mTo").value,
+      });
+      if (!body.success) throw new Error(body.error || "Send failed");
+      showMsg(msg, "✅ Email sent! (ID: " + body.messageId + ")", true);
+      loadLogs();
+    } catch (e) {
+      showMsg(msg, "❌ " + e.message, false);
+    } finally {
+      btn.disabled = false;
+    }
+  };
+
+  // ---------- history ----------
+  async function loadLogs() {
+    try {
+      const r = await fetch("/api/logs");
+      const logs = await r.json();
+      const tb = document.getElementById("logBody");
+      const empty = document.getElementById("logEmpty");
+      tb.innerHTML = "";
+      if (!logs.length) {
+        empty.className = "empty";
+        return;
+      }
+      empty.className = "empty hidden";
+      for (const L of logs) {
+        const tr = document.createElement("tr");
+        const time = new Date(L.time).toLocaleString();
+        tr.innerHTML = "<td>" + time + "</td><td>" + escapeHtml(L.to) + "</td><td>" +
+          (L.subject ? escapeHtml(L.subject) : "") + "</td><td><span class='badge'>✓ " + L.status + "</span></td>";
+        tb.appendChild(tr);
+      }
+    } catch (e) { /* server not ready yet */ }
+  }
+  function escapeHtml(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+
+  loadLogs();
+</script>
+</body>
+</html>
