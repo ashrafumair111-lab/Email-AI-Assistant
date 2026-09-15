@@ -1,4 +1,4 @@
 node_modules/
 .env
 *.log
-email-log.json
+backend/email-log.json

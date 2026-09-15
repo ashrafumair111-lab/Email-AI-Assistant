@@ -112,19 +112,40 @@ The result is a complete, production-ready full-stack web app, built with **zero
 
 ```
 email-ai-assistant/
-├── public/
-│   └── index.html          # Modern dark-themed web interface (tabs: AI / Manual / History)
-├── mailer.js               # Gmail SMTP transport via Nodemailer
-├── groq.js                 # Groq API client (native fetch — no SDK)
-├── ai-email.js             # Prompt engineering → subject & body as JSON
-├── server.js               # Express server: REST API + static files
-├── test-send.js            # Quick plain-email sender test
-├── test-e2e.js             # Full end-to-end test (AI → send → logs)
-├── email-log.json          # Auto-generated send history (git-ignored)
-├── .env.example            # Credentials template (commit this)
-├── .env                    # Your real secrets — NEVER commit
-├── package.json
-└── README.md
+├── docker-compose.yml        # docker compose up --build → runs everything
+├── package.json              # root helper scripts (dev / tests)
+│
+├── backend/                  # Node.js + Express API
+│   ├── Dockerfile            # Multi-stage build, non-root user, healthcheck
+│   ├── .dockerignore
+│   ├── server.js             # REST API: /api/ai-email · /send-email · /api/logs
+│   ├── groq.js               # Groq client (native fetch — no SDK)
+│   ├── ai-email.js           # Prompt engineering → subject & body JSON
+│   ├── mailer.js             # Gmail SMTP transport (Nodemailer, SSL :465)
+│   ├── verify-auth.js        # Gmail credential checker (no email sent)
+│   ├── test-send.js          # Quick plain-email sender test
+│   ├── test-e2e.js           # Full end-to-end test (AI → send → logs)
+│   ├── public/               # Legacy static UI fallback (served by Express)
+│   ├── .env.example          # Credentials template (commit this)
+│   ├── .env                  # Your real secrets — NEVER commit
+│   └── email-log.json        # Send history (Docker: /data volume instead)
+│
+└── frontend/                 # React 18 + Vite UI (separate app)
+    ├── Dockerfile            # vite build → nginx (proxies /api → backend)
+    ├── nginx.conf            # SPA routing + /api & /send-email proxy
+    ├── .dockerignore
+    ├── index.html
+    ├── vite.config.js        # Dev proxy /api + /send-email → :3000
+    ├── package.json
+    └── src/
+        ├── main.jsx          # React entry point
+        ├── App.jsx           # Tabs + layout
+        ├── api.js            # fetch helper
+        ├── index.css         # Dark theme (ported from original UI)
+        └── components/
+            ├── ComposeAI.jsx # AI compose → preview → send
+            ├── ManualSend.jsx
+            └── History.jsx   # Send log table
 ```
 
 ---
@@ -147,17 +168,53 @@ email-ai-assistant/
 git clone https://github.com/ashrafumair111-lab/Email-AI-Assistant.git
 cd Email-AI-Assistant
 
-# 2. Install dependencies
-npm install
+# 2. Configure credentials
+cp backend/.env.example backend/.env    # then fill in your real values
 
-# 3. Configure environment
-cp .env.example .env       # then fill in your real values
-
-# 4. Run the server
-npm start
+# 3. Run EVERYTHING with one command 🐳
+docker compose up --build
 ```
 
-Open your browser → **http://localhost:3000** 🎉
+Open your browser → **http://localhost:8080** 🎉 (API also reachable on :3000)
+
+> ℹ️ First run pulls Node/nginx base images and builds both images. The AI +
+> Gmail stack works out of the box — send history persists in the
+> `email-logs` Docker volume even across rebuilds and restarts.
+
+### Run without Docker (dev mode)
+
+```bash
+npm install
+npm install --prefix backend
+npm install --prefix frontend
+npm run check-auth                      # verify Gmail credentials
+
+npm run backend                         # Terminal 1 → API  http://localhost:3000
+npm run frontend                        # Terminal 2 → UI   http://localhost:5173
+```
+
+> ℹ️ In dev mode the Vite dev server proxies `/api` and `/send-email` to the
+> backend, so no CORS setup is needed. The legacy static UI still works at
+> http://localhost:3000 (`backend/public/index.html`).
+
+---
+
+## 🐳 Docker
+
+| Service | Container | Port | What it runs |
+|---|---|---|---|
+| `frontend` | `email-frontend` | **8080** | nginx serving the React build; proxies `/api` + `/send-email` → backend |
+| `backend` | `email-backend` | 3000 | Node 20 (Alpine) Express API, runs as **non-root** user |
+
+- **Persistent history** — `email-logs` named volume mounted at `/data` (`LOG_FILE=/data/email-log.json`)
+- **Healthchecks** — both images define them; compose waits for the backend to be healthy before starting the frontend
+- **Graceful shutdown** — backend handles `SIGTERM`, so `docker compose down` stops it cleanly
+- **One command** — `docker compose up --build` builds + starts everything; `docker compose down` stops it
+
+> ⚠️ What Docker does **not** give you here: no TLS/HTTPS termination (put a
+> reverse proxy like Caddy/traefik or a cloud load balancer in front for that),
+> no rate limiting/auth on the API, and secrets live in plaintext `.env`
+> (fine for personal use — use Docker secrets or a vault for real production).
 
 ---
 
@@ -253,7 +310,7 @@ curl http://localhost:3000/api/logs
 
 ## 🖥️ Web Interface
 
-The dashboard at `http://localhost:3000` has three tabs:
+The dashboard at **http://localhost:8080** (Docker) or **http://localhost:5173** (dev) has three tabs:
 
 1. **✍️ Compose with AI** — describe the email, choose a tone, get a preview, then send
 2. **✉️ Manual Send** — write a plain email and send it directly
@@ -278,6 +335,30 @@ Expected E2E output:
    subject: Meeting Confirmation for Tomorrow
    ✅ E2E TEST PASSED
 ```
+
+## 🔧 Troubleshooting
+
+### `535-5.7.8 Username and Password not accepted` (BadCredentials)
+
+Google rejected the Gmail login. This means the **App Password** in `.env` is
+no longer valid for `GMAIL_USER` — Google revokes App Passwords when you
+change your account password, remove 2-Step Verification, delete the app
+password from security settings, or the password was simply mistyped.
+
+Fix:
+1. Open **https://myaccount.google.com/apppasswords**
+2. Confirm **2-Step Verification is ON** for the Google account.
+3. Create a **new** App Password (app: *Mail*, device: *Windows*).
+4. Paste it into `.env` → `GMAIL_APP_PASSWORD` (spaces are fine — they are stripped automatically).
+5. Verify credentials without sending anything:
+   ```bash
+   npm run check-auth
+   ```
+6. Once you see `[AUTH OK]`, start the server: `npm start`
+
+> ⚠️ Your normal Google account password will **never** work for SMTP —
+> an App Password is required, and it is only visible at creation time.
+
 
 ---
 

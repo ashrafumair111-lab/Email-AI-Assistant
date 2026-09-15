@@ -1,0 +1,35 @@
+services:
+  backend:
+    build: ./backend
+    container_name: email-backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env          # GMAIL_USER, GMAIL_APP_PASSWORD, GROQ_API_KEY, ...
+    environment:
+      # Compose owns the port contract (overrides any PORT in .env)
+      - PORT=3000
+      # Persistent email log across container rebuilds
+      - LOG_FILE=/data/email-log.json
+    volumes:
+      - email-logs:/data
+    ports:
+      - "3000:3000"             # direct API access + legacy static UI
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+  frontend:
+    build: ./frontend
+    container_name: email-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "8080:80"               # React UI: http://localhost:8080
+
+volumes:
+  email-logs:

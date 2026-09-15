@@ -1,10 +1,11 @@
 {
-  "name": "email-ai-assistant",
+  "name": "email-ai-assistant-backend",
   "version": "1.0.0",
-  "description": "AI-powered email assistant: write, preview, and send professional emails with Groq AI (Llama 3.3) and Gmail SMTP from a modern web UI.",
+  "description": "AI Email Assistant backend — Express + Groq AI + Gmail SMTP",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "check-auth": "node verify-auth.js",
     "test-send": "node test-send.js",
     "test-e2e": "node test-e2e.js"
   },

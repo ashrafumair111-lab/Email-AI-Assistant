@@ -1,0 +1,14 @@
+{
+  "name": "email-ai-assistant",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AI-powered email assistant — monorepo: React frontend (frontend/) + Express/Gmail backend (backend/). Run everything with: docker compose up",
+  "scripts": {
+    "backend": "npm --prefix backend start",
+    "frontend": "npm --prefix frontend run dev",
+    "check-auth": "npm --prefix backend run check-auth",
+    "test-send": "npm --prefix backend run test-send",
+    "test-e2e": "npm --prefix backend run test-e2e"
+  },
+  "license": "MIT"
+}

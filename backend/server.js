@@ -7,7 +7,8 @@ const { generateEmail } = require("./ai-email");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const LOG_FILE = path.join(__dirname, "email-log.json");
+// Log location is configurable so Docker can mount a persistent volume
+const LOG_FILE = process.env.LOG_FILE || path.join(__dirname, "email-log.json");
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
@@ -22,9 +23,14 @@ function loadLog() {
 }
 
 function appendLog(entry) {
-  const log = loadLog();
-  log.unshift(entry);
-  fs.writeFileSync(LOG_FILE, JSON.stringify(log, null, 2));
+  // Never fail an already-successful send because of a logging problem
+  try {
+    const log = loadLog();
+    log.unshift(entry);
+    fs.writeFileSync(LOG_FILE, JSON.stringify(log, null, 2));
+  } catch (e) {
+    console.error("Warning: could not write email log:", e.message);
+  }
 }
 
 // ---------- routes ----------
@@ -104,6 +110,15 @@ app.get("/api/logs", (req, res) => {
   res.json(loadLog());
 });
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`AI Email Server running on http://localhost:${PORT}`);
 });
+
+// Graceful shutdown — lets `docker stop` / compose scale-down finish cleanly
+function shutdown(signal) {
+  console.log(`${signal} received — shutting down...`);
+  server.close(() => process.exit(0));
+  setTimeout(() => process.exit(1), 10000).unref();
+}
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
